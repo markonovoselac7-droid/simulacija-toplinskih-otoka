@@ -13,7 +13,6 @@
     .app { display:flex; flex-direction:column; height:100dvh; min-height:560px; }
     .header { height:67px; flex-shrink:0; background:#142f42; color:white; display:flex; align-items:center; justify-content:space-between; padding:0 22px; gap:20px; }
     .brand { display:flex; align-items:center; gap:13px; min-width:0; }
-    .brand-mark { background:#285367; border:1px solid #4c8095; width:39px; height:39px; display:grid; place-items:center; border-radius:11px; font-size:22px; flex-shrink:0; }
     .brand strong { display:block; font-size:15px; font-weight:750; letter-spacing:-.2px; }
     .brand small { display:block; font-size:11px; color:#b3d0db; margin-top:3px; letter-spacing:.2px; }
     .workspace { display:flex; min-height:0; flex:1; }
@@ -71,7 +70,12 @@
 <body>
 <div class="app">
   <header class="header">
-    <div class="brand"><div class="brand-mark" aria-hidden="true">◈</div><div><strong>Digitalni blizanac grada Zagreba</strong><small>Simulacija urbanih toplinskih otoka (2021.)</small></div></div>
+    <div class="brand">
+  <div>
+    <strong>Digitalni blizanac grada Zagreba</strong>
+    <small>Simulacija urbanih toplinskih otoka (2021.)</small>
+  </div>
+</div>
   </header>
   <main class="workspace">
     <div class="map-wrap">
