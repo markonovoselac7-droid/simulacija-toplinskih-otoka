@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Digitalni blizanac grada Zagreba | 3D UHI simulator cijelog grada</title>
+  <meta name="description" content="Interaktivna 3D simulacija promjene korištenja zemljišta, površinske temperature i UHI-ja bez spremanja izmjena u izvorni sloj.">
+  <script type="module" src="https://js.arcgis.com/5.2/"></script>
+  <style>
+    :root { color-scheme: light; --navy:#132c3f; --ink:#182f3d; --muted:#637986; --line:#e2e9ed; --panel:#fff; --blue:#1e667b; --mint:#d8f4ec; }
+    * { box-sizing: border-box; }
+    html, body { height:100%; margin:0; font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:#e8eef0; }
+    .app { display:flex; flex-direction:column; height:100dvh; min-height:560px; }
+    .header { height:67px; flex-shrink:0; background:#142f42; color:white; display:flex; align-items:center; justify-content:space-between; padding:0 22px; gap:20px; }
+    .brand { display:flex; align-items:center; gap:13px; min-width:0; }
+    .brand-mark { background:#285367; border:1px solid #4c8095; width:39px; height:39px; display:grid; place-items:center; border-radius:11px; font-size:22px; flex-shrink:0; }
+    .brand strong { display:block; font-size:15px; font-weight:750; letter-spacing:-.2px; }
+    .brand small { display:block; font-size:11px; color:#b3d0db; margin-top:3px; letter-spacing:.2px; }
+    .header-chip { display:flex; align-items:center; gap:8px; padding:9px 11px; background:#1b4254; border:1px solid #46697a; border-radius:100px; font-size:11px; font-weight:650; white-space:nowrap; }
+    .header-chip span { width:8px; height:8px; background:#51d4a9; border-radius:50%; }
+    .workspace { display:flex; min-height:0; flex:1; }
+    .map-wrap { position:relative; flex:1; min-width:0; background:#dce7e9; }
+    arcgis-scene { display:block; width:100%; height:100%; }
+    .map-caption { position:absolute; left:16px; bottom:16px; z-index:10; background:rgba(255,255,255,.95); border:1px solid #d3e0e6; border-radius:10px; box-shadow:0 8px 24px #112b3a15; padding:11px 13px; max-width:305px; pointer-events:none; }
+    .map-caption strong { display:block; font-size:12px; }
+    .map-caption span { display:block; font-size:11px; color:#687e8a; margin-top:4px; line-height:1.55; }
+    .sidebar { width:370px; flex-shrink:0; background:#f9fbfc; border-left:1px solid #c9d6dd; display:flex; flex-direction:column; min-height:0; box-shadow:-10px 0 30px #2343520a; }
+    .side-scroll { overflow-y:auto; min-height:0; padding:22px 21px 26px; }
+    .eyebrow { font-size:10px; text-transform:uppercase; color:#4b7d90; letter-spacing:1.5px; font-weight:800; margin:0 0 8px; }
+    h1 { font-size:23px; line-height:1.14; margin:0 0 8px; letter-spacing:-.8px; }
+    h2 { font-size:13px; letter-spacing:-.2px; margin:0 0 11px; }
+    .lead { color:var(--muted); font-size:12px; line-height:1.6; margin:0 0 17px; }
+    .status { display:flex; gap:8px; align-items:start; color:#426275; background:#eaf3f7; font-size:11px; padding:11px 12px; border-radius:9px; line-height:1.45; margin-bottom:17px; }
+    .status.error { background:#fff0eb; color:#9d453a; }
+    .status.ready { background:#e8f5ee; color:#28734e; }
+    .status .dot { margin-top:4px; width:7px; height:7px; background:currentColor; border-radius:50%; flex-shrink:0; }
+    .card { background:white; border:1px solid var(--line); border-radius:12px; padding:15px; margin-bottom:14px; box-shadow:0 2px 3px #223a4804; }
+    .selected-empty { border:1px dashed #bbccd5; border-radius:9px; padding:22px 10px; text-align:center; color:#718897; background:#f5f9fa; font-size:12px; line-height:1.55; }
+    .pill { background:#eff5f7; color:#36586a; padding:5px 8px; border-radius:6px; font-size:10px; font-weight:700; display:inline-block; }
+    .selected-title { font-size:13px; font-weight:700; line-height:1.5; margin:9px 0; }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+    .metric { background:#f4f8fa; border:1px solid #e4edf1; padding:12px; border-radius:9px; }
+    .metric label { font-size:10px; line-height:1.3; color:#69818d; display:block; }
+    .metric strong { font-size:20px; font-variant-numeric:tabular-nums; display:block; margin-top:7px; letter-spacing:-.45px; }
+    .metric.delta { background:#eef7f4; border-color:#cfe9e1; }
+    .metric.delta.is-warm { background:#fff4f1; border-color:#efd8d2; }
+    .metric.delta strong { color:#176e5e; }
+    .metric.delta.is-warm strong { color:#c04f3e; }
+    .compare-head { display:flex; justify-content:space-between; gap:8px; align-items:center; margin:0 0 9px; }
+    .select-label { color:#607886; font-weight:650; display:block; font-size:11px; margin:14px 0 7px; }
+    select { width:100%; border:1px solid #c7d7df; background:#fff; padding:11px 12px; border-radius:8px; color:#183547; font-size:12px; line-height:1.4; cursor:pointer; }
+    select:disabled { opacity:.6; cursor:not-allowed; }
+    .code-desc { font-size:11px; color:#6a808c; margin-top:8px; min-height:18px; line-height:1.5; }
+    .actions { display:flex; gap:7px; margin-top:13px; }
+    button { border-radius:8px; padding:10px 11px; border:1px solid #b6cbd4; background:white; color:#244e60; font-size:11px; font-weight:700; cursor:pointer; transition:background .15s ease; }
+    button:hover:not(:disabled) { background:#eaf3f6; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    button.primary { background:#1a5e77; color:#fff; border-color:#1a5e77; }
+    button.primary:hover:not(:disabled) { background:#154e62; }
+    button.full { width:100%; margin-top:11px; }
+    .legend { display:grid; gap:7px; }
+    .legend-row { display:flex; align-items:center; gap:10px; font-size:11px; color:#536c7b; }
+    .legend-swatch { width:31px; height:17px; border:1px solid #a7b5c177; border-radius:4px; flex-shrink:0; }
+    .note { font-size:11px; line-height:1.65; color:#6d8190; margin:8px 0 0; }
+    .footer { border-top:1px solid var(--line); background:white; padding:13px 20px; color:#617d8d; font-size:10px; line-height:1.5; }
+    .links a { color:#24677e; text-decoration:none; }
+    .links a:hover { text-decoration:underline; }
+    .stats { display:flex; justify-content:space-between; font-size:11px; color:#5d7a88; padding:9px 1px 0; }
+    .stats strong { color:#143c51; }
+    @media (max-width:850px) { .workspace { flex-direction:column; } .map-wrap { height:50vh; min-height:300px; flex:none; } .sidebar { width:100%; flex:1; min-height:220px; border-left:0; border-top:1px solid #cfdee3; } .app { height:auto; min-height:100dvh; } .side-scroll { overflow:visible; } .header { padding:0 13px; } .brand strong { font-size:12px; } .brand small { font-size:10px; } .header-chip { font-size:9px; padding:8px; } }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="brand"><div class="brand-mark" aria-hidden="true">◈</div><div><strong>Digitalni blizanac grada Zagreba</strong><small>Simulacija urbanih toplinskih otoka (2021.)</small></div></div>
+    <div class="header-chip"><span></span> BEZ SPREMANJA U AGOL</div>
+  </header>
+  <main class="workspace">
+    <div class="map-wrap">
+      <arcgis-scene id="scene" item-id="626c75f551eb4dcbb5398e15781d72b0">
+        <arcgis-zoom slot="top-left"></arcgis-zoom>
+        <arcgis-navigation-toggle slot="top-left"></arcgis-navigation-toggle>
+        <arcgis-compass slot="top-left"></arcgis-compass>
+      </arcgis-scene>
+      <div class="map-caption"><strong>Odaberi poligon na 3D karti</strong><span>Klikni na obojenu površinu bilo gdje u Zagrebu.</span></div>
+    </div>
+    <aside class="sidebar">
+      <div class="side-scroll">
+        <h1>Simulacija urbanih toplinskih otoka</h1>
+        <p class="lead">Promijeni klasu korištenja zemljišta i odmah usporedi početnu i simuliranu površinsku temperaturu te vrijednost urbanog toplinskog otoka pojedinog poligona.</p>
+        <div id="status" class="status" role="status" aria-live="polite"><span class="dot"></span><span id="statusText">Učitavanje 3D scene i sloja za cijeli Zagreb…</span></div>
+        <section class="card">
+          <h2>01 · Odabrana površina</h2>
+          <div id="empty" class="selected-empty">Klikni bilo koji poligon na 3D karti za pokretanje simulacije.</div>
+          <div id="selection" hidden>
+            <span id="originalCode" class="pill">UA kod</span>
+            <div id="originalName" class="selected-title"></div>
+            <div class="two-col">
+              <div class="metric"><label>Izvorna površinska temperatura</label><strong id="originalLst">—</strong></div>
+              <div class="metric"><label>Izvorni urbani toplinski otok</label><strong id="originalUhi">—</strong></div>
+            </div>
+            <button id="zoomBtn" class="full" type="button">Centriraj odabrani poligon</button><button id="cityBtn" class="full" type="button">Prikaži cijeli Grad Zagreb</button>
+          </div>
+        </section>
+        <section class="card">
+          <h2>02 · Nova namjena zemljišta</h2>
+          <label class="select-label" for="targetClass">Simulirana klasa Urban Atlasa 2021.</label>
+          <select id="targetClass" disabled><option>Prvo odaberi poligon</option></select>
+          <p class="code-desc" id="targetDesc">Na raspolaganju su sve 23 izvorne klase.</p>
+          <div class="actions"><button id="resetOne" type="button" disabled>↺ Poništi poligon</button><button id="resetAll" type="button" disabled>↺ Poništi sve</button></div>
+        </section>
+        <section class="card">
+          <h2>03 · Temperaturni učinak</h2>
+          <div class="two-col">
+            <div class="metric"><label>Simulirana površinska temperatura</label><strong id="newLst">—</strong></div>
+            <div class="metric"><label>Simulirani urbani toplinski otok</label><strong id="newUhi">—</strong></div>
+          </div>
+          <div id="deltaMetric" class="metric delta" style="margin-top:9px"><label>Promjena površinskih temperatura i urbanih toplinskih otoka</label><strong id="delta">—</strong></div>
+          <p class="note">Procjena: Površinska temperatura poligona + razlika površinskih temperatura nove i postojeće klase. Referentna temperatura urbanih toplinskih otoka ostaje nepromijenjena.</p>
+          <div class="stats"><span>Aktivne prenamjene</span><strong id="changedCount">0 poligona</strong></div>
+        </section>
+        <section class="card">
+          <div class="compare-head"><h2 style="margin:0">Legenda · 9 razreda urbanih toplinskih otoka</h2><span class="pill">°C</span></div>
+          <div id="legend" class="legend"></div>
+          <p class="note">Svih 9 boja definirano je u aplikaciji, čak i kad nijedan poligon ne pripada pojedinom razredu. Nedostajuće vrijednosti označene su sivo.</p>
+        </section>
+      </div>
+      <footer class="footer">
+        <div>Scenarijska procjena, a ne fizikalna prognoza. Cijeli Zagreb: 3D karta učitava poligone po potrebi; mijenjaju se samo lokalne kopije odabranih poligona.</div>
+        <div class="links" style="margin-top:7px"><a href="https://www.arcgis.com/home/item.html?id=626c75f551eb4dcbb5398e15781d72b0" target="_blank" rel="noopener">Izvorna 3D scena</a> · <a href="https://services1.arcgis.com/srGsjgmVH7sYUOi4/arcgis/rest/services/Urban_atlas_2021_UHI/FeatureServer/0" target="_blank" rel="noopener">Sloj za cijeli Zagreb</a></div>
+      </footer>
+    </aside>
+  </main>
+</div>
+<script type="module">
+  // Ulazni podaci: stvarne vrijednosti LST_MEAN i KLASA_HRV iz UA2021_SIMULACIJA_REFERENTNE_TEMP.
+  const CLASSES = [
+  {
+    "code": "11100",
+    "name": "Cjelovita urbana područja (>80% površine)",
+    "lst": 37.83650637
+  },
+  {
+    "code": "11210",
+    "name": "Nepovezana urbana područja veće gustoće (50-80%)",
+    "lst": 36.24948788
+  },
+  {
+    "code": "11220",
+    "name": "Nepovezana urbana područja srednje gustoće (30-50%)",
+    "lst": 35.26067958
+  },
+  {
+    "code": "11230",
+    "name": "Nepovezana urbana područja manje gustoće (10-30%)",
+    "lst": 34.56841696
+  },
+  {
+    "code": "11240",
+    "name": "Nepovezana urbana područja jako male gustoće (<10%)",
+    "lst": 33.86904627
+  },
+  {
+    "code": "11300",
+    "name": "Izdvojena područja",
+    "lst": 32.83843252
+  },
+  {
+    "code": "12100",
+    "name": "Industrijski, komercijalni, javni, vojni i privatni objekti",
+    "lst": 37.40318178
+  },
+  {
+    "code": "12210",
+    "name": "Brze ceste i pripadajuće zemljište",
+    "lst": 34.95535269
+  },
+  {
+    "code": "12220",
+    "name": "Ostale ceste i pripadajuće zemljište",
+    "lst": 35.67023024
+  },
+  {
+    "code": "12230",
+    "name": "Željeznice i pripadajuće zemljište",
+    "lst": 36.26293521
+  },
+  {
+    "code": "13100",
+    "name": "Mjesta eksploatacije mineralnih sirovina i odlagališta otpada",
+    "lst": 35.12525804
+  },
+  {
+    "code": "13300",
+    "name": "Gradilišta",
+    "lst": 35.61616461
+  },
+  {
+    "code": "13400",
+    "name": "Područja bez trenutne namjene",
+    "lst": 35.836502
+  },
+  {
+    "code": "14110",
+    "name": "Zelene gradske površine",
+    "lst": 33.78833909
+  },
+  {
+    "code": "14200",
+    "name": "Športsko rekreacijske površine",
+    "lst": 35.79107132
+  },
+  {
+    "code": "21000",
+    "name": "Obradivo zemljište, jednogodišnji nasadi",
+    "lst": 33.69061897
+  },
+  {
+    "code": "23000",
+    "name": "Pašnjaci",
+    "lst": 32.95459014
+  },
+  {
+    "code": "24000",
+    "name": "Heterogena poljoprivredna područja",
+    "lst": 33.14102241
+  },
+  {
+    "code": "31000",
+    "name": "Šume",
+    "lst": 28.25273254
+  },
+  {
+    "code": "32000",
+    "name": "Grmolike i travne, prirodne biljne zajednice",
+    "lst": 31.87605517
+  },
+  {
+    "code": "33000",
+    "name": "Otvorene površine sa malo ili bez vegetacije",
+    "lst": 32.0433362
+  },
+  {
+    "code": "40000",
+    "name": "Vlažna područja",
+    "lst": 31.86459262
+  },
+  {
+    "code": "50000",
+    "name": "Vodene površine",
+    "lst": 29.5037912
+  }
+];
+  // Javni izvor za cijeli Grad Zagreb (izravno s AGOL-a). Samo čitanje.
+  const SOURCE_URL = 'https://services1.arcgis.com/srGsjgmVH7sYUOi4/arcgis/rest/services/Urban_atlas_2021_UHI/FeatureServer/0';
+  const CLASS_LOOKUP = new Map(CLASSES.map(c => [c.code, c]));
+  const RANGES = [
+    {max:-3.5, label:'01 · ≤ −3,5 °C', hex:'#2166AC'},
+    {max:-2.5, label:'02 · −3,5 do −2,5 °C', hex:'#4393C3'},
+    {max:-1.5, label:'03 · −2,5 do −1,5 °C', hex:'#92C5DE'},
+    {max:-0.5, label:'04 · −1,5 do −0,5 °C', hex:'#D1E5F0'},
+    {max:0.5, label:'05 · −0,5 do +0,5 °C', hex:'#F7F7F7'},
+    {max:1.5, label:'06 · +0,5 do +1,5 °C', hex:'#FDDBC7'},
+    {max:2.5, label:'07 · +1,5 do +2,5 °C', hex:'#F4A582'},
+    {max:3.5, label:'08 · +2,5 do +3,5 °C', hex:'#D6604D'},
+    {max:Infinity, label:'09 · ≥ +3,5 °C', hex:'#B2182B'}
+  ];
+  const $ = id => document.getElementById(id);
+  const scene = $('scene');
+  // U memoriji držimo samo poligone koje je korisnik kliknuo, ne 12.000+ geometrija.
+  const records = new Map();
+  const simulated = new Map();
+  let activeId = null;
+  let overlayLayer = null;
+  let cityLayer = null;
+  let objectIdField = 'OBJECTID';
+  let clickSeq = 0;
+  const fmt = v => Number.isFinite(v) ? v.toLocaleString('hr-HR',{minimumFractionDigits:2,maximumFractionDigits:2})+' °C' : 'N/A';
+  const fmtSigned = v => Number.isFinite(v) ? (v>0?'+':'')+fmt(v) : 'N/A';
+  const hexToRgba = (hex,opacity=0.9) => [parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),opacity];
+  const num = x => x === null || x === undefined || x === '' ? NaN : Number(x);
+  const classCode = code => String(code??'').trim();
+  const validClass = code => CLASS_LOOKUP.has(classCode(code));
+  const rangeIndex = uhi => RANGES.findIndex(r => uhi <= r.max);
+  const rangeFor = uhi => RANGES[Math.max(0,rangeIndex(uhi))];
+  const getDelta = (row,newCode) => {
+    const old = CLASS_LOOKUP.get(row.code);
+    const next = CLASS_LOOKUP.get(newCode);
+    return old && next ? next.lst-old.lst : NaN;
+  };
+  const currentCode = row => simulated.get(row.id) || row.code;
+  const currentUhi = row => row.uhi+getDelta(row,currentCode(row));
+  const currentLst = row => row.lst+getDelta(row,currentCode(row));
+
+  function showStatus(message,kind='loading') {
+    $('status').className='status'+(kind==='ready'?' ready':kind==='error'?' error':'');
+    $('statusText').textContent=message;
+  }
+  function baseSymbol(hex) {
+    return {type:'simple-fill',color:hexToRgba(hex,0.86),outline:{color:[255,255,255,0.66],width:0.45}};
+  }
+  function overlaySymbol(uhi,selected=false) {
+    const color=Number.isFinite(uhi)?rangeFor(uhi).hex:'#9aa7b0';
+    return {type:'simple-fill',color:hexToRgba(color,0.99),outline:{color:selected?[13,35,49,1]:[255,255,255,0.9],width:selected?2.3:0.8}};
+  }
+  function refreshOverlay(row) {
+    const shouldDraw=simulated.has(row.id)||row.id===activeId;
+    if(!shouldDraw) {
+      if(row.graphic) { overlayLayer.remove(row.graphic); row.graphic=null; }
+      return;
+    }
+    if(!row.graphic){
+      row.graphic=new GraphicForOverlay({geometry:row.geometry,attributes:{featureOID:row.id},symbol:overlaySymbol(currentUhi(row),row.id===activeId)});
+      overlayLayer.add(row.graphic);
+    } else {
+      row.graphic.symbol=overlaySymbol(currentUhi(row),row.id===activeId);
+    }
+  }
+  // Graphics are constructed after ArcGIS modules load; avoids a separate query for all features.
+  let GraphicForOverlay;
+
+  function renderPanel() {
+    const row=records.get(activeId);
+    $('empty').hidden=!!row;
+    $('selection').hidden=!row;
+    $('targetClass').disabled=!row||!row.canSimulate;
+    $('resetOne').disabled=!row||!simulated.has(row.id);
+    $('resetAll').disabled=simulated.size===0;
+    $('changedCount').textContent=simulated.size+' '+(simulated.size===1?'poligon':'poligona');
+    if(!row) {
+      $('targetClass').innerHTML='<option>Prvo odaberi poligon</option>';
+      $('targetDesc').textContent='Na raspolaganju su sve 23 izvorne klase.';
+      $('originalLst').textContent=$('originalUhi').textContent=$('newLst').textContent=$('newUhi').textContent=$('delta').textContent='—';
+      return;
+    }
+    $('originalCode').textContent=row.code;
+    $('originalName').textContent=CLASS_LOOKUP.get(row.code)?.name || row.originalName || 'Nepoznata klasa';
+    $('originalLst').textContent=fmt(row.lst);
+    $('originalUhi').textContent=fmt(row.uhi);
+    $('targetClass').replaceChildren(...CLASSES.map(c=>{
+      const o=document.createElement('option');o.value=c.code;o.textContent=c.code+' · '+c.name;return o;
+    }));
+    $('targetClass').value=validClass(currentCode(row))?currentCode(row):CLASSES[0].code;
+    $('targetDesc').textContent=row.canSimulate?(CLASS_LOOKUP.get(currentCode(row))?.name || ''):'Nedostaje početna klasa, LST ili UHI za ovaj poligon.';
+    $('newLst').textContent=row.canSimulate?fmt(currentLst(row)):'N/A';
+    $('newUhi').textContent=row.canSimulate?fmt(currentUhi(row)):'N/A';
+    const delta=row.canSimulate?getDelta(row,currentCode(row)):NaN;
+    $('delta').textContent=fmtSigned(delta);
+    $('deltaMetric').classList.toggle('is-warm',delta>0);
+    $('deltaMetric').style.background=!Number.isFinite(delta)||delta===0?'#f4f8fa':'';
+  }
+  function setSelected(id) {
+    const old=records.get(activeId);
+    activeId=id;
+    if(old) refreshOverlay(old);
+    const next=records.get(id);
+    if(next) refreshOverlay(next);
+    renderPanel();
+  }
+  function updateSimulation(code) {
+    const row=records.get(activeId);
+    if(!row||!row.canSimulate||!validClass(code))return;
+    if(code===row.code)simulated.delete(row.id);
+    else simulated.set(row.id,code);
+    refreshOverlay(row);renderPanel();
+  }
+  $('legend').replaceChildren(...RANGES.map(r=>{
+    const el=document.createElement('div');el.className='legend-row';
+    const sw=document.createElement('span');sw.className='legend-swatch';sw.style.backgroundColor=r.hex;
+    const lab=document.createElement('span');lab.textContent=r.label;
+    el.append(sw,lab);return el;
+  }));
+  $('targetClass').addEventListener('change',e=>updateSimulation(e.target.value));
+  $('resetOne').addEventListener('click',()=>{
+    const row=records.get(activeId);if(!row)return;
+    simulated.delete(row.id);refreshOverlay(row);renderPanel();
+  });
+  $('resetAll').addEventListener('click',()=>{
+    simulated.clear();for(const row of records.values())refreshOverlay(row);renderPanel();
+    showStatus('Sve su lokalne simulacije poništene. AGOL podaci nisu mijenjani.','ready');
+  });
+  $('zoomBtn').addEventListener('click',async()=>{
+    const row=records.get(activeId);if(!row)return;
+    try{await scene.view.goTo({target:row.geometry.extent.expand(1.18),tilt:58},{duration:900});}
+    catch(e){console.info('Centriranje:',e);}
+  });
+  $('cityBtn').addEventListener('click',async()=>{
+    if(!cityLayer)return;
+    try { await scene.view.goTo({target:cityLayer.fullExtent,tilt:45},{duration:1200}); }
+    catch(e){console.info('Cijeli Zagreb:',e);}
+  });
+
+  try {
+    const [FeatureLayer,GraphicsLayer,Graphic] = await $arcgis.import([
+      '@arcgis/core/layers/FeatureLayer.js',
+      '@arcgis/core/layers/GraphicsLayer.js',
+      '@arcgis/core/Graphic.js'
+    ]);
+    GraphicForOverlay=Graphic;
+    await scene.viewOnReady();
+    showStatus('3D scena učitana. Povezujem cijeli Zagreb…');
+
+    // Sakrij prethodni mali testni sloj samo u ovoj sesiji: nema scene.save().
+    const oldTestURL='https://services1.arcgis.com/srGsjgmVH7sYUOi4/arcgis/rest/services/UA2021_UHI_SIMULACIJE_PLAN/FeatureServer/0';
+    const normalized = v => String(v||'').replace(/\/+$/,'').toLowerCase();
+    scene.map.allLayers.forEach(layer=>{
+      if(normalized(layer.url)===normalized(oldTestURL)||layer.title==='UA2021_UHI_SIMULACIJE_PLAN')layer.visible=false;
+    });
+
+    // Klasifikacija 9 razreda postoji unaprijed; ne ovisi o trenutačno prisutnim vrijednostima.
+    // Izvorni sloj dolazi s poslužitelja po dijelovima, bez queryFeatures(where:'1=1').
+    const arcade=`var u=$feature.UHI_2021;
+if(u==null) return 'N';
+if(u<=-3.5) return '01';
+if(u<=-2.5) return '02';
+if(u<=-1.5) return '03';
+if(u<=-0.5) return '04';
+if(u<=0.5) return '05';
+if(u<=1.5) return '06';
+if(u<=2.5) return '07';
+if(u<3.5) return '08';
+return '09';`;
+    cityLayer=new FeatureLayer({
+      url:SOURCE_URL,
+      title:'Urban Atlas 2021 – UHI cijelog Zagreba',
+      outFields:['OBJECTID','code_2021','KLASA_HRV','MEAN_2021','UHI_2021'],
+      popupEnabled:false,
+      elevationInfo:{mode:'on-the-ground'},
+      renderer:{
+        type:'unique-value',
+        valueExpression:arcade,
+        valueExpressionTitle:'UHI – 9 razreda',
+        defaultSymbol:baseSymbol('#A3ADB4'),
+        uniqueValueInfos:RANGES.map((r,i)=>({
+          value:String(i+1).padStart(2,'0'),
+          label:r.label,
+          symbol:baseSymbol(r.hex)
+        }))
+      }
+    });
+    await cityLayer.load();
+    objectIdField=cityLayer.objectIdField||'OBJECTID';
+    scene.map.add(cityLayer);
+
+    // Samo simulirani i trenutno odabrani poligoni dobivaju privremeni prikaz.
+    overlayLayer=new GraphicsLayer({
+      title:'Privremene UHI simulacije (bez upisa)',
+      listMode:'hide',
+      elevationInfo:{mode:'relative-to-ground',offset:0.35}
+    });
+    scene.map.add(overlayLayer);
+
+    scene.addEventListener('arcgisViewImmediateClick',async event=>{
+      const seq=++clickSeq;
+      try {
+        const hit=await scene.hitTest(event.detail,{include:[overlayLayer,cityLayer]});
+        const selected=hit?.results?.find(r=>r.graphic?.layer===overlayLayer||r.graphic?.layer===cityLayer)?.graphic;
+        if(!selected)return;
+        let id=selected.layer===overlayLayer?selected.attributes?.featureOID:selected.attributes?.[objectIdField];
+        id=String(id??'');
+        if(!id)return;
+        if(records.has(id)) {setSelected(id);return;}
+        showStatus('Učitavam odabrani poligon…');
+        // Upit za SAMO JEDAN poligon, čime izbjegavamo granicu od 2.000 zapisa.
+        const q=cityLayer.createQuery();
+        q.objectIds=[Number(id)];
+        q.where='1=1';
+        q.outFields=[objectIdField,'code_2021','KLASA_HRV','MEAN_2021','UHI_2021'];
+        q.returnGeometry=true;
+        q.outSpatialReference=scene.spatialReference;
+        const response=await cityLayer.queryFeatures(q);
+        if(seq!==clickSeq)return;
+        const f=response.features?.[0];
+        if(!f?.geometry)throw new Error('Geometrija odabranog poligona nije dostupna.');
+        const code=classCode(f.attributes.code_2021);
+        const lst=num(f.attributes.MEAN_2021),uhi=num(f.attributes.UHI_2021);
+        const row={id,code,lst,uhi,geometry:f.geometry,graphic:null,
+          originalName:String(f.attributes.KLASA_HRV||''),
+          canSimulate:validClass(code)&&Number.isFinite(lst)&&Number.isFinite(uhi)};
+        records.set(id,row);setSelected(id);
+        showStatus(row.canSimulate?'Poligon odabran. Promijeni klasu i usporedi rezultate.':'Poligon nema sve potrebne vrijednosti za simulaciju.','ready');
+      } catch(error) {
+        console.error('Odabir poligona:',error);
+        if(seq===clickSeq)showStatus('Poligon nije moguće učitati: '+(error?.message||error),'error');
+      }
+    });
+    showStatus('Spremno: cijeli Zagreb. Zumiraj i klikni bilo koji UA2021 poligon.','ready');
+    renderPanel();
+    console.info('UHI simulator cijelog grada: dinamički FeatureLayer; pojedinačni upiti; bez spremanja.');
+  } catch(error) {
+    console.error(error);
+    showStatus('Nije moguće učitati scenu ili sloj. Provjeri dijeljenje scene i pristup AGOL-u. Detalj: '+(error?.message||error),'error');
+  }
+
+</script>
+</body>
+</html>
